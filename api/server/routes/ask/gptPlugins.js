@@ -17,6 +17,7 @@ const {
 } = require('~/server/middleware');
 const { validateTools } = require('~/app');
 const { logger } = require('~/config');
+const spendTokens = require('~/models/spendTokens');
 
 const router = express.Router();
 
@@ -137,6 +138,52 @@ router.post(
       if (pluginIndex !== -1) {
         plugins[pluginIndex].loading = false;
         plugins[pluginIndex].outputs = output;
+        console.log(
+          pluginIndex,
+          plugins[pluginIndex],
+          plugins[pluginIndex].latest,
+          plugins[pluginIndex].inputs[0],
+        );
+        // For Dall-E, spend tokens based on the quality of the image
+        if (plugins[pluginIndex].latest === 'dalle') {
+          if (!plugins[pluginIndex].outputs.startsWith('![')) {
+            return; // no image generated
+          }
+          const input = plugins[pluginIndex].inputs[0]?.toLowerCase();
+          /* Pricing is like this:
+          Standard, 1024x1024: $0.04 per image
+          Standard	1024×1792, 1792×1024 $0.08 per image
+          HD	1024×1024 $0.08 per image
+          HD	1024×1792, 1792×1024 $0.12 per image
+
+          In other words: Standard 1024x1024 is quality 1,
+          Increasing either to HD or size increases quality to 2
+          Increasing both increases quality to 3
+          For each quality, price is increased by $0.04
+           */
+          let quality = 1;
+          if (input && !input.includes('"quality":"standard"')) {
+            // not "standard" quality
+            quality++;
+          }
+          if (input && !input.includes('"size":"1024x1024"')) {
+            // not "1024x1024" size
+            quality++;
+          }
+          await spendTokens(
+            {
+              user,
+              conversationId,
+              model: 'DALL-E',
+              context: 'message',
+              valueKey: 'dall-e',
+            },
+            {
+              promptTokens: 0,
+              completionTokens: 40000 * quality,
+            },
+          );
+        }
       }
     };
 
