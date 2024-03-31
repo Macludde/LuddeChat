@@ -20,7 +20,7 @@ const { logger } = require('~/config');
 const spendTokens = require('~/models/spendTokens');
 const checkBalance = require('~/models/checkBalance');
 
-const payForDallE = async (plugin, ...tx) => {
+const payForDallE = async (plugin, tx) => {
   const input = plugin.inputs[0]?.toLowerCase();
   /* Pricing is like this:
           Standard, 1024x1024: $0.04 per image
@@ -167,6 +167,39 @@ router.post(
 
     const pluginMap = new Map();
 
+    const getAbortData = () => ({
+      sender,
+      conversationId,
+      messageId: responseMessageId,
+      parentMessageId: overrideParentMessageId ?? userMessageId,
+      text: getPartialText(),
+      plugins: plugins.map((p) => ({ ...p, loading: false })),
+      userMessage,
+      promptTokens,
+    });
+    const { abortController, onStart } = createAbortController(req, res, getAbortData);
+
+    const onAgentAction = async (action, runId) => {
+      pluginMap.set(runId, action.tool);
+      sendIntermediateMessage(res, { plugins });
+      if (action.tool === 'dalle') {
+        try {
+          await checkBalanceForDallE(action.toolInput, {
+            req,
+            res,
+            txData: { user, conversationId },
+          });
+        } catch (error) {
+          handleAbortError(res, req, error, {
+            conversationId,
+            sender,
+            messageId: responseMessageId,
+            parentMessageId: userMessageId ?? parentMessageId,
+          });
+        }
+      }
+    };
+
     const onToolStart = async (tool, input, runId, parentRunId) => {
       const pluginName = pluginMap.get(parentRunId);
       const latestPlugin = {
@@ -216,39 +249,6 @@ router.post(
 
     const onChainEnd = () => {
       saveMessage({ ...userMessage, user });
-      sendIntermediateMessage(res, { plugins });
-    };
-
-    const getAbortData = () => ({
-      sender,
-      conversationId,
-      messageId: responseMessageId,
-      parentMessageId: overrideParentMessageId ?? userMessageId,
-      text: getPartialText(),
-      plugins: plugins.map((p) => ({ ...p, loading: false })),
-      userMessage,
-      promptTokens,
-    });
-    const { abortController, onStart } = createAbortController(req, res, getAbortData);
-
-    const onAgentAction = async (action, runId) => {
-      if (action.tool === 'dalle') {
-        try {
-          await checkBalanceForDallE(action.toolInput, {
-            req,
-            res,
-            txData: { user, conversationId },
-          });
-        } catch (error) {
-          handleAbortError(res, req, error, {
-            conversationId,
-            sender,
-            messageId: responseMessageId,
-            parentMessageId: userMessageId ?? parentMessageId,
-          });
-        }
-      }
-      pluginMap.set(runId, action.tool);
       sendIntermediateMessage(res, { plugins });
     };
 
