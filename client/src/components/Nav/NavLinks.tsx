@@ -1,22 +1,23 @@
-import { useLocation } from 'react-router-dom';
-import { Fragment, useState, memo } from 'react';
-import { Download, FileText } from 'lucide-react';
 import { Menu, Transition } from '@headlessui/react';
-import { useRecoilValue, useRecoilState } from 'recoil';
-import { useGetUserBalance, useGetStartupConfig } from 'librechat-data-provider/react-query';
 import type { TConversation } from 'librechat-data-provider';
+import { useGetStartupConfig, useGetUserBalance } from 'librechat-data-provider/react-query';
+import { Download, FileText, PlusIcon } from 'lucide-react';
+import { Fragment, memo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useRecoilState, useRecoilValue } from 'recoil';
+import { GearIcon, LinkIcon } from '~/components';
 import FilesView from '~/components/Chat/Input/Files/FilesView';
-import { useAuthContext } from '~/hooks/AuthContext';
-import useAvatar from '~/hooks/Messages/useAvatar';
-import { ExportModal } from './ExportConversation';
-import { LinkIcon, GearIcon } from '~/components';
+import SwishModal, { BalanceInSEK } from '~/components/Swish/SwishModal';
 import { UserIcon } from '~/components/svg';
 import { useLocalize } from '~/hooks';
-import Settings from './Settings';
-import NavLink from './NavLink';
-import Logout from './Logout';
-import { cn } from '~/utils/';
+import { useAuthContext } from '~/hooks/AuthContext';
+import useAvatar from '~/hooks/Messages/useAvatar';
 import store from '~/store';
+import { cn } from '~/utils/';
+import { ExportModal } from './ExportConversation';
+import Logout from './Logout';
+import NavLink from './NavLink';
+import Settings from './Settings';
 
 function NavLinks() {
   const localize = useLocalize();
@@ -29,6 +30,8 @@ function NavLinks() {
   const [showExports, setShowExports] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showFiles, setShowFiles] = useRecoilState(store.showFiles);
+
+  const [showPayment, setShowPayment] = useState(false);
 
   const activeConvo = useRecoilValue(store.conversationByIndex(0));
   const globalConvo = useRecoilValue(store.conversation) ?? ({} as TConversation);
@@ -60,9 +63,23 @@ function NavLinks() {
         {({ open }) => (
           <>
             {startupConfig?.checkBalance && balanceQuery.data && (
-              <div className="m-1 ml-3 whitespace-nowrap text-left text-sm text-black dark:text-gray-200">
-                {`Balance: ${balanceQuery.data}`}
-              </div>
+              <>
+                <Menu.Button
+                  className="m-1 ml-3 flex items-center whitespace-nowrap text-left text-sm text-black dark:text-gray-200"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowPayment(true);
+                  }}
+                >
+                  Balans (<BalanceInSEK credits={Number.parseFloat(balanceQuery.data)} />){' '}
+                  <PlusIcon />
+                </Menu.Button>
+                <SwishModal
+                  open={showPayment}
+                  onOpenChange={setShowPayment}
+                  currentBalance={Number.parseFloat(balanceQuery.data)}
+                />
+              </>
             )}
             <Menu.Button
               className={cn(
@@ -148,7 +165,7 @@ function NavLinks() {
                     clickHandler={() => setShowSettings(true)}
                   />
                 </Menu.Item>
-                <div className="my-1 h-px bg-black/20 bg-white/20" role="none" />
+                <div className="my-1 h-px bg-black/20 dark:bg-white/20" role="none" />
                 <Menu.Item as="div">
                   <Logout />
                 </Menu.Item>
