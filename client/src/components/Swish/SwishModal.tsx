@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useToastContext } from '~/Providers';
 import { NotificationSeverity } from '~/common';
-import
-{
+import {
   Button,
   Dialog,
   DialogContent,
@@ -54,7 +53,6 @@ function SwishModal({ open, onOpenChange, currentBalance }: Props) {
           Authorization: `Bearer ${token}`,
         },
       });
-      console.log(res);
       if (res.ok) {
         showToast({
           severity: NotificationSeverity.SUCCESS,
@@ -105,8 +103,13 @@ function SwishModal({ open, onOpenChange, currentBalance }: Props) {
             får, och kostnaden av dem går till 100% för att betala OpenAI, jag tar ingen
             mellanskillnad eller vinst.
           </p>
+          <p className="text-black dark:text-white">
+            Buggade något ut eller råkade du ladda om sidan efter du betalat? Skriva in samma belopp
+            som du swisha ovan och tryck &quot;Jag har swishat&quot;
+          </p>
           <p className="text-lg font-semibold text-black dark:text-white">
-            Skanna qr koden nedan eller tryck (om du är på mobil) för att betala.
+            Skanna qr koden nedan (med mobilkameran, inte i Swish) eller tryck (om du är på mobil)
+            för att betala.
           </p>
           <a href={swishUrl} className="self-center text-center">
             <h1 className="text-xl font-bold text-black dark:text-white">Swish</h1>

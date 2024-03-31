@@ -123,6 +123,7 @@ router.post('/payment', async (req, res) => {
         rawAmount: convertKrToCred(newAmount),
       });
       res.status(200).send('ok');
+      return;
     }
     res.status(400).send('Could not verify transaction');
   } catch (err) {

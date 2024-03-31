@@ -62,7 +62,7 @@ function NavLinks() {
       <Menu as="div" className="group relative">
         {({ open }) => (
           <>
-            {startupConfig?.checkBalance && balanceQuery.data && (
+            {startupConfig?.checkBalance && (
               <>
                 <Menu.Button
                   className="m-1 ml-3 flex items-center whitespace-nowrap text-left text-sm text-black dark:text-gray-200"
@@ -71,13 +71,13 @@ function NavLinks() {
                     setShowPayment(true);
                   }}
                 >
-                  Balans (<BalanceInSEK credits={Number.parseFloat(balanceQuery.data)} />){' '}
+                  Balans (<BalanceInSEK credits={Number.parseFloat(balanceQuery.data ?? '0')} />){' '}
                   <PlusIcon />
                 </Menu.Button>
                 <SwishModal
                   open={showPayment}
                   onOpenChange={setShowPayment}
-                  currentBalance={Number.parseFloat(balanceQuery.data)}
+                  currentBalance={Number.parseFloat(balanceQuery.data ?? '0')}
                 />
               </>
             )}
