@@ -19,6 +19,7 @@ const tokenValues = {
   'claude-2.1': { prompt: 8, completion: 24 },
   'claude-2': { prompt: 8, completion: 24 },
   'claude-': { prompt: 0.8, completion: 2.4 },
+  'dall-e': { prompt: 0, completion: 1 },
 };
 
 /**

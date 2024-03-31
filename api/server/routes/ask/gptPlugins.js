@@ -18,6 +18,67 @@ const {
 const { validateTools } = require('~/app');
 const { logger } = require('~/config');
 const spendTokens = require('~/models/spendTokens');
+const checkBalance = require('~/models/checkBalance');
+
+const payForDallE = async (plugin, ...tx) => {
+  const input = plugin.inputs[0]?.toLowerCase();
+  /* Pricing is like this:
+          Standard, 1024x1024: $0.04 per image
+          Standard	1024×1792, 1792×1024 $0.08 per image
+          HD	1024×1024 $0.08 per image
+          HD	1024×1792, 1792×1024 $0.12 per image
+
+          In other words: Standard 1024x1024 is quality 1,
+          Increasing either to HD or size increases quality to 2
+          Increasing both increases quality to 3
+          For each quality, price is increased by $0.04
+           */
+  let quality = 1;
+  if (input && !input.includes('"quality":"standard"')) {
+    // not "standard" quality
+    quality++;
+  }
+  if (input && !input.includes('"size":"1024x1024"')) {
+    // not "1024x1024" size
+    quality++;
+  }
+  await spendTokens(
+    {
+      ...tx,
+      model: 'DALL-E',
+      context: 'message',
+      valueKey: 'dall-e',
+    },
+    {
+      promptTokens: 0,
+      completionTokens: 40000 * quality,
+    },
+  );
+};
+
+const checkBalanceForDallE = async (dalleInput, tx) => {
+  console.log('Checking for balance', dalleInput);
+  let quality = 1;
+  if (dalleInput.quality !== 'standard') {
+    // not "standard" quality
+    quality++;
+  }
+  if (dalleInput.size !== '1024x1024') {
+    // not "1024x1024" size
+    quality++;
+  }
+  await checkBalance({
+    ...tx,
+    txData: {
+      ...tx.txData,
+      tokenType: 'completion',
+      amount: 40000 * quality,
+      model: 'DALL-E',
+      context: 'message',
+      valueKey: 'dall-e',
+    },
+  });
+};
 
 const router = express.Router();
 
@@ -105,10 +166,6 @@ router.post(
     });
 
     const pluginMap = new Map();
-    const onAgentAction = async (action, runId) => {
-      pluginMap.set(runId, action.tool);
-      sendIntermediateMessage(res, { plugins });
-    };
 
     const onToolStart = async (tool, input, runId, parentRunId) => {
       const pluginName = pluginMap.get(parentRunId);
@@ -146,43 +203,13 @@ router.post(
         );
         // For Dall-E, spend tokens based on the quality of the image
         if (plugins[pluginIndex].latest === 'dalle') {
-          if (!plugins[pluginIndex].outputs.startsWith('![')) {
+          if (!output.startsWith('![')) {
             return; // no image generated
           }
-          const input = plugins[pluginIndex].inputs[0]?.toLowerCase();
-          /* Pricing is like this:
-          Standard, 1024x1024: $0.04 per image
-          Standard	1024×1792, 1792×1024 $0.08 per image
-          HD	1024×1024 $0.08 per image
-          HD	1024×1792, 1792×1024 $0.12 per image
-
-          In other words: Standard 1024x1024 is quality 1,
-          Increasing either to HD or size increases quality to 2
-          Increasing both increases quality to 3
-          For each quality, price is increased by $0.04
-           */
-          let quality = 1;
-          if (input && !input.includes('"quality":"standard"')) {
-            // not "standard" quality
-            quality++;
-          }
-          if (input && !input.includes('"size":"1024x1024"')) {
-            // not "1024x1024" size
-            quality++;
-          }
-          await spendTokens(
-            {
-              user,
-              conversationId,
-              model: 'DALL-E',
-              context: 'message',
-              valueKey: 'dall-e',
-            },
-            {
-              promptTokens: 0,
-              completionTokens: 40000 * quality,
-            },
-          );
+          payForDallE(plugins[pluginIndex], {
+            user,
+            conversationId,
+          });
         }
       }
     };
@@ -203,6 +230,27 @@ router.post(
       promptTokens,
     });
     const { abortController, onStart } = createAbortController(req, res, getAbortData);
+
+    const onAgentAction = async (action, runId) => {
+      if (action.tool === 'dalle') {
+        try {
+          await checkBalanceForDallE(action.toolInput, {
+            req,
+            res,
+            txData: { user, conversationId },
+          });
+        } catch (error) {
+          handleAbortError(res, req, error, {
+            conversationId,
+            sender,
+            messageId: responseMessageId,
+            parentMessageId: userMessageId ?? parentMessageId,
+          });
+        }
+      }
+      pluginMap.set(runId, action.tool);
+      sendIntermediateMessage(res, { plugins });
+    };
 
     try {
       endpointOption.tools = await validateTools(user, endpointOption.tools);
